@@ -1,39 +1,22 @@
-#[macro_use]
 extern crate iron;
+extern crate hyper;
 
-use std::collections::HashMap;
+mod music;
+mod router;
+
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
 use iron::prelude::*;
-use iron::Handler;
 use iron::status;
+use iron::headers::ContentType;
 
-struct Router {
-    // Routes here are simply matched with the url Path
-    routes: HashMap<String, Box<Handler>>
-}
+use hyper::mime::{Mime, TopLevel, SubLevel};
 
-impl Router {
-    fn new() -> Self {
-        Router { routes: HashMap::new() }
-    }
-
-    fn add_route<H>(&mut self, path: String, handler: H) where H: Handler {
-        self.routes.insert(path, Box::new(handler));
-    }
-}
-
-impl Handler for Router {
-    fn handle(&self, req: &mut Request) -> IronResult<Response> {
-        match self.routes.get(&req.url.path.join("/")) {
-            Some(handler) => handler.handle(req),
-            None => Ok(Response::with(status::NotFound))
-        }
-    }
-}
+use music::store::Song;
+use router::Router;
 
 fn main() {
     let mut router = Router::new();
@@ -82,6 +65,29 @@ fn main() {
         };
 
         Ok(Response::with((status::Ok, s)))
+    });
+
+    router.add_route("song".to_string(), |_: &mut Request| {
+        let song_name = "song.mp3".to_string();
+        let mut song = match Song::new(&song_name) {
+            Err(why) => return Ok(Response::with((status::NotFound, format!("couldn't open {}: {}", &song_name, Error::description(&why))))),
+            Ok(song) => song,
+        };
+
+        let mut s = Vec::new();
+        match song.read_to_end(&mut s) {
+            Err(why) => panic!("couldn't read {}: {}", &song_name, Error::description(&why)),
+            Ok(_) => {},
+        };
+
+        println!("read the whole song");
+
+        let mut res = Response::with((status::Ok, s));
+        res.headers.set(
+            ContentType(Mime(TopLevel::Audio, SubLevel::Ext("mp3".to_string()), vec![]))
+        );
+
+        Ok(res)
     });
 
     Iron::new(router).http("localhost:3000").unwrap();
