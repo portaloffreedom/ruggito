@@ -16,7 +16,7 @@ use iron::headers::ContentType;
 use hyper::mime::{Mime, TopLevel, SubLevel};
 
 use music::store::Song;
-use router::Router;
+use router::{Router,ParamRouter,StringParameter};
 
 fn main() {
     let mut router = Router::new();
@@ -24,59 +24,25 @@ fn main() {
     router.add_route("hello".to_string(), |_: &mut Request| {
         Ok(Response::with((status::Ok, "Hello world!")))
     });
-    router.add_route("hello/again".to_string(), |_: &mut Request| {
-        Ok(Response::with((status::Ok, "Hello again!")))
-    });
-    router.add_route("file".to_string(), |_: &mut Request| {
-        let path = Path::new("test.txt");
-        let display = path.display();
-
-        let mut file = match File::open(&path) {
-            Err(why) => return Ok(Response::with((status::InternalServerError,
-                format!("couldn't open {}: {}", display, Error::description(&why))))),
-            Ok(file) => file,
-        };
-
-        let mut s = String::new();
-        match file.read_to_string(&mut s) {
-            Err(why) => panic!("couldn't read {}: {}", display, Error::description(&why)),
-            Ok(_) => print!("{} contains:\n{}", display, s),
-        };
-
-        Ok(Response::with((status::Ok, s)))
-    });
     router.add_route("error".to_string(), |_: &mut Request| {
         Ok(Response::with(status::BadRequest))
     });
-    router.add_route("error/file".to_string(), |_: &mut Request| {
-        let path = Path::new("non_existing.txt");
-        let display = path.display();
 
-        let mut file = match File::open(&path) {
-            Err(why) => return Ok(Response::with((status::InternalServerError,
-                format!("couldn't open {}: {}", display, Error::description(&why))))),
-            Ok(file) => file,
+    let mut music_router = Router::new();
+
+    music_router.add_route("a".to_string(), |req: &mut Request| {
+        let song_name = match req.extensions.get_mut::<StringParameter>() {
+            Some(param) => param,
+            None => return Ok(Response::with(status::NotFound)),
         };
-
-        let mut s = String::new();
-        match file.read_to_string(&mut s) {
-            Err(why) => panic!("couldn't read {}: {}", display, Error::description(&why)),
-            Ok(_) => print!("{} contains:\n{}", display, s),
-        };
-
-        Ok(Response::with((status::Ok, s)))
-    });
-
-    router.add_route("song".to_string(), |_: &mut Request| {
-        let song_name = "song.mp3".to_string();
-        let mut song = match Song::new(&song_name) {
-            Err(why) => return Ok(Response::with((status::NotFound, format!("couldn't open {}: {}", &song_name, Error::description(&why))))),
+        let mut song = match Song::new(song_name) {
+            Err(why) => return Ok(Response::with((status::NotFound, format!("couldn't open {}: {}", song_name, Error::description(&why))))),
             Ok(song) => song,
         };
 
         let mut s = Vec::new();
         match song.read_to_end(&mut s) {
-            Err(why) => panic!("couldn't read {}: {}", &song_name, Error::description(&why)),
+            Err(why) => panic!("couldn't read {}: {}", song_name, Error::description(&why)),
             Ok(_) => {},
         };
 
@@ -89,6 +55,10 @@ fn main() {
 
         Ok(res)
     });
+
+    let song_name_router = ParamRouter::new(music_router);
+
+    router.add_route("song".to_string(), song_name_router);
 
     Iron::new(router).http("localhost:3000").unwrap();
 }
