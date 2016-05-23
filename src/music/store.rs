@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
-use std::path::Path;
 use std::io::Result;
+use std::path::Path;
 
 pub struct Song {
     file: File,
@@ -48,24 +48,30 @@ impl MusicStore {
         MusicStore { map: HashMap::new() }
     }
 
-    //TODO add result
-    pub fn add_song(&mut self, id: String, file_path: String) {
+    pub fn add_song(&mut self, id: String, file_path: String) -> Result<()> {
         {
             let path = Path::new(&file_path);
             let display = path.display();
 
             let mut file = match File::open(&path) {
-                Err(why) => panic!("couldn't open {}: {}", display, Error::description(&why)),
+                Err(why) => {
+                    println!("couldn't open {}: {}", display, Error::description(&why));
+                    return Err(why);
+                },
                 Ok(file) => file,
             };
 
             let mut s = String::new();
             match file.read_to_string(&mut s) {
-                Err(why) => panic!("couldn't read {}: {}", display, Error::description(&why)),
+                Err(why) => {
+                    println!("couldn't read {}: {}", display, Error::description(&why));
+                    return Err(why);
+                },
                 Ok(_) => {},
             };
         }
 
         self.map.insert(id, file_path);
+        Ok(())
     }
 }

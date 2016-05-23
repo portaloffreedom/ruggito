@@ -26,6 +26,9 @@ impl Router {
 
 impl Handler for Router {
     fn handle(&self, req: &mut Request) -> IronResult<Response> {
+        if req.url.path.len() == 0 {
+            return Ok(Response::with(status::NotFound));
+        }
         match self.routes.get(&req.url.path[0]) {
             Some(handler) => {
                 req.url.path.remove(0);
